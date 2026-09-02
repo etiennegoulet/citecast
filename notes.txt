@@ -1,0 +1,1 @@
+- arXiv has an entry in their API which is "arxiv:primary_category" and category, which are subject tags, which could be use for ML
