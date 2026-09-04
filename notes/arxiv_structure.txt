@@ -1,0 +1,10 @@
+source_type = 'paper'
+source_name = 'arxiv'
+external_id = entry.id
+title = entry.title
+url = entry.link
+summary = entry.summary
+authors = [a.name for a in entry.authors]
+published_at = entry.published (datetime.fromisoformat(entry.published)), published might not always be there
+fetched_at = now
+raw = entry
