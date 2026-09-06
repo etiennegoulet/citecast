@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 AI Intelligence — a compounding intelligence pipeline for AI research signal, powering both a SaaS digest product and a consulting practice from shared infrastructure.
 
-Full architecture: [ai-intelligence-architecture.md](ai-intelligence-architecture.md) (diagram: [ai-intelligence-architecture.svg](ai-intelligence-architecture.svg)). Read it before making structural decisions — this file only summarizes what's needed day-to-day.
+Full architecture: [docs/architecture.md](docs/architecture.md) (diagram: [docs/architecture.svg](docs/architecture.svg)). Read it before making structural decisions — this file only summarizes what's needed day-to-day.
 
 **Status:** pre-code. No stack, framework, or repo layout has been chosen yet. When that's decided, record it here.
 

@@ -1,0 +1,6 @@
+- arXiv has an entry in their API which is "arxiv:primary_category" and category, which are subject tags, which could be use for ML
+
+- published might not always be there for different articles or websites, etc. keep in mind
+
+- For blogs, some good news sites don't offer RSS, like anthropic, but are available through third-party rss feeds like : https://github.com/Olshansk/rss-feeds
+
