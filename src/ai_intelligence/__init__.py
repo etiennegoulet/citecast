@@ -1,2 +1,5 @@
+from ai_intelligence.run import run
+
+
 def main() -> None:
-    print("Hello from ai-intelligence!")
+    run()

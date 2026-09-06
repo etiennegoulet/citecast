@@ -1,23 +1,51 @@
-# import httpx
-# import feedparser
+"""Manual scratch script for testing fetchers and inserts one piece at a time.
 
-# params = {
-#     "search_query": "cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.MA",
-#     "sortBy": "submittedDate",
-#     "sortOrder": "descending",
-#     "max_results": 10,
-# }
+Usage:
+    uv run python explore.py arxiv          # fetch only, print results
+    uv run python explore.py blogs          # fetch only, print results
+    uv run python explore.py arxiv --store  # fetch + insert into DB
+    uv run python explore.py blogs --store  # fetch + insert into DB
+"""
 
-# response = httpx.get("http://export.arxiv.org/api/query", params=params, follow_redirects=True)
-# print(response.status_code)
-# # print(response.text)
-# feed = feedparser.parse(response.text)
-# entry0 = feed.entries[0]
-# print(entry0.keys())
+import sys
 
 from ai_intelligence.sources.arxiv import fetch_arxiv
+from ai_intelligence.sources.blogs import fetch_all_blogs
 from ai_intelligence.store import insert_items
 
-items = fetch_arxiv(max_results=5)
-inserted, skipped = insert_items(items)
-print(f'{inserted} inserted, {skipped} skipped')
+
+def test_fetch_arxiv() -> list[dict]:
+    items = fetch_arxiv(max_results=5)
+    print(f"fetched {len(items)} arxiv items")
+    for item in items:
+        print(f"  - [{item['source_name']}] {item['title']}")
+    return items
+
+
+def test_fetch_blogs() -> list[dict]:
+    items = fetch_all_blogs()
+    print(f"fetched {len(items)} blog items")
+    for item in items:
+        print(f"  - [{item['source_name']}] {item['title']}")
+    return items
+
+
+def store(items: list[dict]) -> None:
+    inserted, skipped = insert_items(items)
+    print(f"{inserted} inserted, {skipped} skipped")
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    target = args[0] if args else "arxiv"
+    should_store = "--store" in args
+
+    if target == "arxiv":
+        fetched = test_fetch_arxiv()
+    elif target == "blogs":
+        fetched = test_fetch_blogs()
+    else:
+        raise SystemExit(f"unknown target: {target!r} (expected 'arxiv' or 'blogs')")
+
+    if should_store:
+        store(fetched)
