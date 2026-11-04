@@ -1,0 +1,11 @@
+[project]
+name = "citecast"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "feedparser>=6.0.14",
+    "httpx>=0.28.1",
+    "matplotlib>=3.11.2",
+    "pandas>=3.1.0",
+    "python-dotenv>=1.2.4",
+]

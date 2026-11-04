@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Secrets (OpenAlex / Semantic Scholar API keys)
+.env
+
+# Data: large, re-downloadable, never committed
+data/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Experiment outputs (scored-paper logs, model artifacts)
+runs/
+models/
+
+# Claude Code per-user settings (CLAUDE.md itself stays tracked)
+.claude/settings.local.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
