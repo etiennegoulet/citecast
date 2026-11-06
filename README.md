@@ -46,7 +46,7 @@ On DBLP, papers that never received a citation were removed before training and 
 | Citation source | unarXive (citing papers must themselves be on arXiv) | OpenAlex (citations from all indexed literature) | Counts citations from journals and conferences too, and scales to the full category |
 | Papers | 5,876 train / 1,471 test, all arXiv fields | All arXiv papers, every field (millions) | Scale. ML categories are reported as the headline |
 | Research areas | arXiv labels across all fields | arXiv primary category by default; other definitions compared in experiment E1 (`docs/experiments.md`) | Same mechanism; no classifier needed |
-| Year 0 | Publication year (source not stated) | Calendar year of the arXiv v1 date | OpenAlex dates papers merged into a journal record with the journal date, usually 1 to 3 years later (`docs/data-notes.md`) |
+| Year 0 | Publication year (source not stated) | Year the paper was announced on arXiv (from its ID) | OpenAlex dates papers merged into a journal record with the journal date, usually 1 to 3 years later; and a paper submitted in late December is public, and citable, only from January (`docs/data-notes.md`) |
 | Train/test split | One cutoff (train 2008-2013, test 2014) | Several rolling temporal cutoffs | ML publishing changed a lot after 2022; one cutoff can't show whether results hold over time |
 | Time step | Years | Years | Monthly steps were planned but dropped: about 39% of OpenAlex citation dates have year precision only (`docs/data-notes.md`) |
 | Zero-citation papers | Removed (DBLP) | Kept | Whether a paper is ever cited is only known later; removing them uses future information |

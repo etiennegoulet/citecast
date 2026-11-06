@@ -7,9 +7,64 @@ The 180-paper sample referred to below comes from `scripts/sample_check.py` (see
 ## Decisions
 
 - **Yearly granularity only** (2026-11-03). Monthly granularity (originally extension 2) is dropped. Reason: 39% of citing works for one paper have year-only dates (see "January 1st" below), which would make monthly features partly fabricated and leak future information.
-- **Year 0 comes from the arXiv v1 date, never from OpenAlex** (2026-11-03). OpenAlex dates merged records with the journal date (see below).
+- **Year 0 comes from arXiv, never from OpenAlex** (2026-11-03). OpenAlex dates merged records with the journal date (see below).
+- **Year 0 is the calendar year the paper became public on arXiv, read from the arXiv ID** (2026-11-06; replaces "calendar year of the v1 date" from 2026-11-03). A paper cannot be read or cited before it is announced, so the announcement year is the right start of its citation clock. The ID encodes the announcement month (`YYMM.NNNNN`, or `archive/YYMMNNN` for old IDs). This differs from the v1 submission year for 0.3% of papers, mostly late-December submissions announced in January (see "arXiv metadata" below). Implemented in `pipeline/build_papers.py`, `papers-v2`.
+- **Papers already published before their arXiv posting are flagged and excluded from modelling** (2026-11-06). Such a paper is not new at its year 0: it may already have years of citations (OpenAlex merges it with its journal record), so its "early" citation history is really that of a mature paper, which is not what we predict. Rows are kept in `papers.parquet` with an `exclude_reason` column, and modelling drops flagged papers, so counts stay reproducible and the decision is reversible by changing a filter. This is not filtering on future information: that the paper was already published is known at posting time. Cleaning is done by rules applied to every paper, never by hand-picking papers.
 - **Published versions are not reconciled** (2026-11-03). When OpenAlex keeps a published version as a separate record, its citations are not added. The target is "citations to the OpenAlex record that holds the arXiv version". See the merging note for the bias this introduces.
-- **Calendar years**, as in the reference paper: year 0 is the calendar year of the arXiv v1 date.
+- **Calendar years**, as in the reference paper.
+
+## Data cleaning log
+
+Every correction, imputation or exclusion applied to the data, with how many papers it touches. If a treatment changes, update the row and bump the `extractor_version` of the affected table.
+
+| Issue | Papers affected | Treatment | Table / version | Status |
+|---|---|---|---|---|
+| v1 date before arXiv opened (before 1991-08-01): papers that existed before they were posted | 67 (34 from 1986 to 1990, 33 from early 1991) | `exclude_reason = 'posted_after_publication'`; excluded from modelling | `papers` / `papers-v2` | Done |
+| Papers posted to arXiv after their journal publication, with normal-looking dates (the general case of the row above) | unknown; probably rare (2 of 180 sampled papers had 1 early citation each, likely date noise) | Detect once OpenAlex is joined, from (a) citations in years before year 0 and (b) OpenAlex `publication_date` earlier than year 0; Kaggle `journal-ref` year as a weak extra signal. Same `exclude_reason`. A single early citation is not enough (citation dates are noisy); threshold to be set after looking at the full-scale distribution | `papers` | Open, after the OpenAlex join |
+| v1 submitted in one year, announced (ID) in the next, mostly late December | 9,030 (0.3%) | Year 0 from the ID year, i.e. counted as January of the next year | `papers` / `papers-v2` | Done |
+| ID year earlier than v1 year | 49 | Year 0 from the ID year (same rule). Cause unknown; a v1 date after the ID was assigned should be impossible, so the v1 date is probably wrong | `papers` / `papers-v2` | Done |
+| Legacy categories (`astro-ph` before 2009, bare `cond-mat`, `solv-int`, `supr-con`, ...) | not yet counted | Map to current categories | `papers` | Open, needed before E1.1 |
+| `doi`, `journal_ref`, `update_date` are snapshot values, not point-in-time | all | Kept for data checks only, never used as features | `papers` / `papers-v1` | Done (warning in the script docstring) |
+
+## arXiv metadata (Kaggle snapshot)
+
+Downloaded 2026-11-06 from Kaggle (`Cornell-University/arxiv`), file `arxiv-metadata-oai-snapshot.json`, 5.7 GB of JSON lines. Converted to `data/papers.parquet` (95 MB) by `pipeline/build_papers.py`.
+
+### Size and coverage (verified, full file)
+
+3,233,620 papers. No paper is missing a v1 date or a category. Papers per year grow steeply: 64k (2009), 113k (2016), 186k (2022), 284k (2025), 311k (2026 to late October, partial year). Consequence: early backtest cutoffs have far fewer training papers per area than late ones, which matters for bucket sizes.
+
+Papers with an ML primary category (cs.LG, cs.CL, cs.AI): about 280k (estimated from a 1-in-500 sample). cs.CV is now the largest single primary category among papers since 2017, ahead of cs.LG.
+
+### The file is sorted by ID as text, not by date (verified)
+
+New-style IDs (`0704.0001` onward) come first, old-style IDs (`hep-th/9901001`) last, because digits sort before letters. Taking the head or tail of the file is not a sample of old or recent papers. Sample with an even stride (e.g. every 500th line).
+
+### Format is consistent (verified, 6,467-paper evenly spread sample)
+
+`versions[0]` is always `v1`. All version dates use the format `Mon, 2 Apr 2007 19:18:42 GMT`. Categories are always separated by single spaces. There is no explicit primary-category field.
+
+### First listed category = primary category (verified for old IDs only)
+
+Old-style IDs embed the primary archive (`hep-th/9901001`). For 414,206 old-ID papers, it matches the archive of the first listed category in 99.95% of cases. The 200 mismatches are reclassifications (127 `physics` papers now first-listed in `math-ph`, 57 `cs` now in `math`). This checks the archive level only, and only for papers before April 2007. **Still to verify** for recent papers at category level, against the arXiv API's `arxiv:primary_category`.
+
+### Year in the arXiv ID vs v1 year (verified, full file)
+
+The ID's `YYMM` is the month the paper was announced; the v1 date is when it was submitted. Difference (ID year minus v1 year): 0 for 3,224,541 papers (99.7%), +1 for 8,969, +2 or more for 61, negative for 49.
+
+The +1 cases are almost all December submissions (7,993 of 8,969; 6,619 submitted on or after December 20). arXiv does not announce over the holidays, so these get January IDs and become public in January. Hypothesis, not checked against arXiv documentation: IDs are assigned at announcement, which is what makes the ID year the public year.
+
+67 papers have v1 dates before arXiv opened in August 1991: 34 from 1986 to 1990 (e.g. `physics/9403001`: ID March 1994, v1 date April 1986) and 33 from January to July 1991, all `math/9201...` (a batch of older papers imported when the math archive opened in January 1992). These are papers that existed before they were posted. The same `math/9201` batch probably also contains papers with v1 dates from August 1991 onward, which this date rule does not catch; the OpenAlex check (data cleaning log) should.
+
+Treatment of both: see "Decisions" and "Data cleaning log".
+
+### Legacy categories change area labels over time (verified, sample)
+
+Before 2009, astrophysics papers were filed as plain `astro-ph`; afterwards they are split into `astro-ph.CO`, `astro-ph.GA`, `astro-ph.SR`, etc. Bare `cond-mat`, `solv-int`, `supr-con` and others are similar. Old records sometimes list the legacy label first and its modern equivalent second (`"supr-con cond-mat.supr-con"`). Without a mapping, a per-category model (E1.1) would put 2008 and 2012 astrophysics papers in different areas, and `astro-ph` would vanish as a test area after 2009. Not every category without a dot is legacy: `hep-th`, `quant-ph`, `gr-qc` are current.
+
+### `doi` and `journal-ref` are weak signals of publication (verified, sample)
+
+Filled for 66% / 57% of pre-2007 papers, but only 32% / 21% of papers since 2017, and 9% of ML papers have a `doi`. Authors add them by hand and many never do. They are current values (point-in-time unsafe), so they cannot be features. Checking OpenAlex merging against them only works for older physics papers.
 
 ## OpenAlex
 
@@ -78,3 +133,5 @@ Script: `scripts/citation_curve.py`.
 
 - At full scale, what share of arXiv papers resolve in OpenAlex, by category and year? (100% in a 180-paper sample.)
 - For the bulk pipeline: is the arXiv ID reliably present in the locations of merged records, so the join can be done locally?
+- Is the first listed category the primary one for recent papers too? (Verified only at archive level for pre-2007 IDs.)
+- Why do 49 papers have an ID year earlier than their v1 year?

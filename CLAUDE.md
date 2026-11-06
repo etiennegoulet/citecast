@@ -61,7 +61,7 @@ The paper's RNN and NCFCM baselines are deliberately not reproduced: they do not
 
 **Point-in-time discipline is non-negotiable.** Every feature for a paper evaluated at time T must be computed using only records whose timestamp is at or before T. Author h-index, venue citation rates, and citation counts are all point-in-time queries, not current values. A 2026-indexed fact must never appear in a 2022 feature vector. Violating this produces a model that looks excellent offline and fails in production.
 
-**Year 0 is the calendar year of the arXiv v1 date.** Never use OpenAlex's `publication_date` for it: for preprints merged into a journal record, OpenAlex gives the journal date, usually 1 to 3 years later.
+**Year 0 is the calendar year the paper became public on arXiv, read from its arXiv ID (`YYMM`).** Never use OpenAlex's `publication_date` for it: for preprints merged into a journal record, OpenAlex gives the journal date, usually 1 to 3 years later.
 
 **No filtering on future information.** Do not drop papers that never get cited (the paper did this on DBLP); whether a paper is ever cited is only known later.
 
