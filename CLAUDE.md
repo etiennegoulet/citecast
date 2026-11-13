@@ -74,7 +74,7 @@ The paper's RNN and NCFCM baselines are deliberately not reproduced: they do not
 Details and evidence for everything here: `docs/data-notes.md`.
 
 - **arXiv metadata** (IDs, primary and cross-listed categories, v1 dates) comes from the **Kaggle arXiv metadata snapshot** for the full dataset. The arXiv API is only for small samples: one request per 3 seconds, single connection, no citation counts. Cross-lists can be added after submission and the snapshot only shows current labels, so cross-list-based features carry a point-in-time risk.
-- **OpenAlex** is the citation source. Yearly series come from `counts_by_year` on each work (verified complete: sums to `cited_by_count` for 179 of 180 sampled papers). Use OpenAlex's counts as given; published versions are not reconciled.
+- **OpenAlex** is the citation source. Yearly series come from `counts_by_year`, which **starts in 2012**: early citation histories are complete only for papers with year 0 ≥ 2012. Use OpenAlex's counts as given; published versions are not reconciled.
   - **Lookup trap:** `filter=doi:<arXiv DOI>` only matches a record's main DOI and misses preprints merged into journal records (most of physics and math). Look up `/works/<arXiv DOI>` directly, or for bulk work, match on the arXiv location (`arxiv.org/abs/<id>`) inside each record.
   - Merging is uneven: most hep-th and math papers are merged into journal records (complete counts), most cs.LG papers are not (conference versions often stay separate, so counts are partial). Cross-field comparisons of citation levels are biased by this.
   - API keys are required (free), stored in `.env` as `OPENALEX_API_KEY`. The bulk CC0 snapshot remains free.
