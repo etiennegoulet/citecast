@@ -9,7 +9,7 @@ from pathlib import Path
 
 import duckdb
 
-EXTRACTOR_VERSION = "citations-v1"
+EXTRACTOR_VERSION = "citations-v2"  # v2: adds OpenAlex publication dates
 RUN_DATE = "2026-11-07"
 RAW = f"data/raw/openalex/{RUN_DATE}/*/*.json.gz"
 MISSING_DIR = Path("data/raw/openalex/missing")  # from fetch_missing.py
@@ -18,7 +18,8 @@ OUT_RECORDS = "data/paper_records.parquet"
 OUT_CITATIONS = "data/citations.parquet"
 
 RECORD_TYPE = """STRUCT(
-    id VARCHAR, doi VARCHAR, type VARCHAR, cited_by_count BIGINT,
+    id VARCHAR, doi VARCHAR, type VARCHAR, publication_date VARCHAR,
+    cited_by_count BIGINT,
     counts_by_year STRUCT(year INTEGER, cited_by_count BIGINT)[],
     locations STRUCT(landing_page_url VARCHAR, pdf_url VARCHAR)[]
 )[]"""
@@ -26,15 +27,22 @@ RECORD = RECORD_TYPE.removesuffix("[]")  # one record instead of a list
 
 # Every source of records, with its fetch date. src orders the sources:
 # if a work is in both, the bulk copy (src 0) wins.
+# The bulk download was resumed after an interruption: slices for years up to
+# 2020 were fetched on 2026-11-07, slices for 2021-2026 on 2026-11-09
+# (docs/data-notes.md). The files carry no timestamp, so the fetch date and the
+# fetch order are read from the slice year in the file path.
 SOURCES = f"""
-    SELECT unnest(results) AS r, '{RUN_DATE}' AS fetched, 0 AS src
-    FROM read_json('{RAW}', columns = {{results: '{RECORD_TYPE}'}})"""
+    SELECT unnest(results) AS r,
+           CASE WHEN regexp_extract(filename, 'year=([0-9]{{4}})', 1)::INT <= 2020
+                THEN '2026-11-07' ELSE '2026-11-09' END AS fetched,
+           0 AS src, filename AS source_file
+    FROM read_json('{RAW}', columns = {{results: '{RECORD_TYPE}'}}, filename = true)"""
 if any(MISSING_DIR.glob("*.jsonl.gz")):
     SOURCES += f"""
     UNION ALL
-    SELECT work AS r, fetched_at[1:10] AS fetched, 1 AS src
+    SELECT work AS r, fetched_at[1:10] AS fetched, 1 AS src, filename AS source_file
     FROM read_json('{MISSING_DIR.as_posix()}/*.jsonl.gz',
-                   columns = {{work: '{RECORD}', fetched_at: 'VARCHAR'}})
+                   columns = {{work: '{RECORD}', fetched_at: 'VARCHAR'}}, filename = true)
     WHERE work IS NOT NULL"""
 
 STEPS = [
@@ -44,6 +52,9 @@ STEPS = [
     CREATE TABLE works AS
     SELECT DISTINCT ON (r.id)
         r.id AS oa_id, r.doi, r.cited_by_count, r.counts_by_year, fetched,
+        -- Text in the raw files; try_cast gives NULL for a malformed date
+        -- instead of failing the build. NULLs are counted in the checks.
+        try_cast(r.publication_date AS DATE) AS publication_date,
         list_distinct(list_filter(list_concat(
             list_transform(r.locations, lambda l: regexp_extract(
                 lower(coalesce(l.landing_page_url, '') || ' ' || coalesce(l.pdf_url, '')),
@@ -53,13 +64,17 @@ STEPS = [
                 '10\\.48550/arxiv\\.([a-z\\-\\.]+/\\d{{7}}|\\d{{4}}\\.\\d{{4,5}})', 1))
         ), lambda x: x <> '')) AS arxiv_ids
     FROM ({SOURCES})
-    ORDER BY r.id, src
+    ORDER BY r.id, src,
+             -- Same work fetched twice (150 works, one changed in between):
+             -- keep the copy from the later slice, which was fetched later,
+             -- so reruns always pick the same copy.
+             source_file DESC
     """,
     # 2. One row per (work, arXiv ID). Old IDs sometimes carry a subject class
     #    in links (math.GT/0309136) but not in Kaggle (math/0309136): strip it.
     """
     CREATE TABLE links AS
-    SELECT oa_id, doi, cited_by_count, counts_by_year, fetched,
+    SELECT oa_id, doi, cited_by_count, counts_by_year, fetched, publication_date,
            len(arxiv_ids) AS ids_on_record,
            regexp_replace(unnest(arxiv_ids), '^([a-z\\-]+)\\.[a-z\\-]+/', '\\1/') AS arxiv_id
     FROM works
@@ -79,7 +94,10 @@ STEPS = [
         SELECT *,
             count(*) OVER w AS n_records,
             bool_or(is_published) OVER w AS any_published,
-            bool_and(is_published) OVER w AS all_published
+            bool_and(is_published) OVER w AS all_published,
+            -- Earliest date over ALL records linked to the paper, before one
+            -- is chosen: catches an old journal record that was not chosen.
+            min(publication_date) OVER w AS earliest_date
         FROM tagged
         WINDOW w AS (PARTITION BY arxiv_id)
     )
@@ -103,6 +121,8 @@ STEPS = [
         SELECT arxiv_id, oa_id, pattern, n_records,
                ids_on_record > 1 AS shared_record,
                cited_by_count,
+               publication_date AS oa_publication_date,  -- chosen record
+               earliest_date AS oa_earliest_date,        -- any linked record
                fetched AS openalex_run_date,
                '{EXTRACTOR_VERSION}' AS extractor_version
         FROM chosen
@@ -130,6 +150,11 @@ CHECKS = {
         SELECT list_sum(list_transform(counts_by_year, lambda c: c.cited_by_count))
                    = cited_by_count, count(*)
         FROM chosen GROUP BY 1""",
+    "publication dates (NULL chosen, NULL earliest, earliest < chosen)": """
+        SELECT count(*) FILTER (WHERE publication_date IS NULL),
+               count(*) FILTER (WHERE earliest_date IS NULL),
+               count(*) FILTER (WHERE earliest_date < publication_date)
+        FROM chosen""",
 }
 
 
