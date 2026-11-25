@@ -6,6 +6,10 @@ This project reproduces and extends:
 
 > Zhang, F. and Wu, S. (2024). Predicting citation impact of academic papers across research areas using multiple models and early citations. *Scientometrics* 129(7), 4137-4166. doi:10.1007/s11192-024-05086-0
 
+## Why this matters
+
+Tens of thousands of papers appear on arXiv every month, and no one can read them all. Citations are the usual signal of impact, but they take years to accumulate. Forecasting a paper's future citations from its early history helps surface important work sooner and separate signal from noise.
+
 ## What the paper does
 
 **Idea.** Citation patterns differ across research areas (AI papers peak around year 4, cryptography papers around year 11) and across papers of different impact within an area (highly cited papers peak later). So instead of one model for all papers, the paper fits many small models, each on a homogeneous group of papers.
